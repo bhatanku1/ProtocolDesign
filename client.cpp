@@ -38,6 +38,7 @@ int main(){
     printf("Received from server: %s\n",buffer1);
 
   }
+  //Send the EOF indication to the server
 	printf("File sent; Sending EOF\n");
    sendto(clientSocket,"OKOKOK",6,0,(struct sockaddr *)&serverAddr,addr_size);
   return 0;
