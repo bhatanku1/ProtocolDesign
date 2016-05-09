@@ -3,7 +3,14 @@
 #include <netinet/in.h>
 #include <string.h>
 #include <arpa/inet.h>
-int main(){
+#include <stdlib.h>
+int main(int argc, char *argv[]){
+  if ( argc != 2 ) /* argc should be 2 for correct execution */
+    {
+        /* We print argv[0] assuming it is the program name */
+        printf( "usage: %s filename", argv[0] );
+        exit(1);
+    }
   int clientSocket, portNum, nBytes, rBytes;
   char buffer[512];
   char buffer1[512];
@@ -21,7 +28,11 @@ int main(){
 
   /*Initialize size variable to be used later on*/
   addr_size = sizeof serverAddr;
-  fptr = fopen("ipl.mp4", "rb");
+  fptr = fopen(argv[1], "rb");
+  if(fptr == 0) {
+      printf("Couldnot open the file\n");
+      exit(1);
+  }
   while(!feof(fptr)){
 //    printf("Type a sentence to send to server:\n");
  //   fgets(buffer,1024,stdin);
