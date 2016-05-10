@@ -4,6 +4,10 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
+struct packet{
+  int bytes;
+  char buffer[512];
+};
 int main(int argc, char *argv[]){
   if ( argc != 2 ) /* argc should be 2 for correct execution */
     {
@@ -15,6 +19,8 @@ int main(int argc, char *argv[]){
   char buffer[512];
   char buffer1[512];
   struct sockaddr_in serverAddr;
+  packet p;
+  int count = 1;
   socklen_t addr_size;
   FILE *fptr;
   /*Create UDP socket*/
@@ -37,11 +43,16 @@ int main(int argc, char *argv[]){
 //    printf("Type a sentence to send to server:\n");
  //   fgets(buffer,1024,stdin);
   //  printf("You typed: %s",buffer);
-    memset(buffer, 0, 512);
+    //memset(buffer, 0, 512);
+      memset(&p, 0, sizeof(struct packet));    
+      p.bytes = ++count;
 //    nBytes = strlen(buffer) + 1;
-    nBytes = fread(buffer, 1, sizeof buffer, fptr);  
+    nBytes = fread(p.buffer, 1, sizeof p.buffer, fptr);  
+    printf("Bytes read in the buffer is: %d\n", nBytes);
     /*Send message to server*/
-    sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
+    sendto(clientSocket,&p ,nBytes + sizeof p.bytes,0,(struct sockaddr *)&serverAddr,addr_size);
+
+    //sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
 	//sendto(clientSocket,"OKOKOK",6,0,(struct sockaddr *)&serverAddr,addr_size);
     /*Receive message from server*/
      rBytes = recvfrom(clientSocket,buffer1,512,0,NULL, NULL);
@@ -51,6 +62,10 @@ int main(int argc, char *argv[]){
   }
   //Send the EOF indication to the server
 	printf("File sent; Sending EOF\n");
-   sendto(clientSocket,"OKOKOK",6,0,(struct sockaddr *)&serverAddr,addr_size);
+  
+  memset(&p, 0, sizeof(struct packet));    
+  p.bytes = -1;
+  strcpy(p.buffer, "OKOKOK");
+  sendto(clientSocket,&p ,6 + sizeof p.bytes,0,(struct sockaddr *)&serverAddr,addr_size);
   return 0;
 }
