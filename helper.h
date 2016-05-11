@@ -15,4 +15,3 @@ int fileSize(char *file) {
 	fclose(fptr);
 	return size;
 }
-

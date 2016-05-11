@@ -1,71 +1,101 @@
+/*
+Ankur Bhatia
+Msc Student
+Technical University of Munich
+bhatia.ankur8@gmail.com */
+
 #include <stdio.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <stdlib.h>
-struct packet{
-  int bytes;
-  char buffer[512];
-};
+#include "helper.h"
+#include "packet.h"
+
+
+
 int main(int argc, char *argv[]){
   if ( argc != 2 ) /* argc should be 2 for correct execution */
     {
         /* We print argv[0] assuming it is the program name */
-        printf( "usage: %s filename", argv[0] );
+        printf( "usage: %s filename\n", argv[0] );
         exit(1);
     }
-  int clientSocket, portNum, nBytes, rBytes;
-  char buffer[512];
-  char buffer1[512];
+    int rBytes; //Bytes received from the server
+    int fBytes; //Bztes read from file
+    int index = 0;
+    /*Initialize the socket Parameters and create the UDP socket*/
+  int socketfd;
   struct sockaddr_in serverAddr;
-  packet p;
-  int count = 1;
-  socklen_t addr_size;
-  FILE *fptr;
-  /*Create UDP socket*/
-  clientSocket = socket(PF_INET, SOCK_DGRAM, 0);
+    socklen_t addr_size;
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(7899);
+    serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero); 
+    addr_size = sizeof serverAddr;
+    socketfd = socket(PF_INET, SOCK_DGRAM, 0);
+    if(socketfd == -1) {
+      printf("Error creating socket");
+      exit(1);
+    }
 
-  /*Configure settings in address struct*/
-  serverAddr.sin_family = AF_INET;
-  serverAddr.sin_port = htons(7891);
-  serverAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
-  memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);  
-
-  /*Initialize size variable to be used later on*/
-  addr_size = sizeof serverAddr;
-  fptr = fopen(argv[1], "rb");
-  if(fptr == 0) {
+    
+    /*Check if the file to be uploaded is present in the client. Else throw an error and exit.*/
+    FILE *fptr;
+    fptr = fopen(argv[1], "rb");
+    if(fptr == 0) {
       printf("Couldnot open the file\n");
       exit(1);
-  }
-  while(!feof(fptr)){
-//    printf("Type a sentence to send to server:\n");
- //   fgets(buffer,1024,stdin);
-  //  printf("You typed: %s",buffer);
-    //memset(buffer, 0, 512);
-      memset(&p, 0, sizeof(struct packet));    
-      p.bytes = ++count;
-//    nBytes = strlen(buffer) + 1;
-    nBytes = fread(p.buffer, 1, sizeof p.buffer, fptr);  
-    printf("Bytes read in the buffer is: %d\n", nBytes);
-    /*Send message to server*/
-    sendto(clientSocket,&p ,nBytes + sizeof p.bytes,0,(struct sockaddr *)&serverAddr,addr_size);
+    }
+    /*create a variable for uploadStatus to get reply from the server*/
+    uploadStatus uploadstatus;
+    /* Create the updateRequest Packet*/
+    uploadRequest uploadrequest;
+    uploadrequest.type = 1;
+    uploadrequest.filesize = fileSize(argv[1]);
+    strcpy(uploadrequest.filename, argv[1]);
+    strcpy(uploadrequest.md5sum, "AAAAAAAAAAAAAAAAAA");
 
-    //sendto(clientSocket,buffer,nBytes,0,(struct sockaddr *)&serverAddr,addr_size);
-	//sendto(clientSocket,"OKOKOK",6,0,(struct sockaddr *)&serverAddr,addr_size);
-    /*Receive message from server*/
-     rBytes = recvfrom(clientSocket,buffer1,512,0,NULL, NULL);
+    printf("Sending UploadRequest to the server. Waiting for reply...\n");
+    printf("Filename: %s\n", uploadrequest.filename);
+    printf("Filesize: %d\n", uploadrequest.filesize);
 
-    printf("Received from server: %s\n",buffer1);
+    /*Send an UpdateRequest Packet.This contains the filename, filesize and the MD5 sum of the
+    file. The client then waits for n seconds for the reply from the server.*/
 
-  }
-  //Send the EOF indication to the server
-	printf("File sent; Sending EOF\n");
-  
-  memset(&p, 0, sizeof(struct packet));    
-  p.bytes = -1;
-  strcpy(p.buffer, "OKOKOK");
-  sendto(clientSocket,&p ,6 + sizeof p.bytes,0,(struct sockaddr *)&serverAddr,addr_size);
-  return 0;
-}
+    sendto(socketfd,&uploadrequest ,sizeof (struct uploadRequest),0,(struct sockaddr *)&serverAddr,addr_size);
+    /*Receive the uploadStatus from the server.
+    If the upload status is uploadAccept, check the offset and start the upload*/
+
+    rBytes = recvfrom(socketfd,&uploadstatus,sizeof (struct uploadStatus),0,NULL, NULL);
+    printf("Received packets from Server");
+    printf("MessageType: %d\n", uploadstatus.type);
+    printf("Messageoffset: %d\n", uploadstatus.offset);
+    printf("Responsecode: %d\n", uploadstatus.responsecode);
+    printf("Bytes received: %d\n", rBytes);
+
+    /*If the uploadstatus is 1 start the upload depending upon the offset.
+    The offset 0 means starts from the beginning*/
+
+    dataPacket datapacket;
+    memset(&datapacket, 0, sizeof(struct dataPacket));    
+    while(!feof(fptr)){
+        memset(&datapacket, 0, sizeof(struct dataPacket));    
+        fBytes = fread(datapacket.data, 1, sizeof datapacket.data, fptr);  
+        printf("Number of bytes> %d\n", fBytes);
+        datapacket.size = fBytes;
+        datapacket.offset = index;
+        sendto(socketfd,&datapacket ,fBytes + 8,0,(struct sockaddr *)&serverAddr,addr_size);
+        index++;
+        if(index % 9 == 0) {
+            rBytes = recvfrom(socketfd,&uploadstatus,sizeof (struct uploadStatus),0,NULL, NULL);
+        }
+        
+    }
+
+
+
+
+    return 0;
+ }
