@@ -1,0 +1,16 @@
+group 'in.tum.protocol_design'
+version '1.0-SNAPSHOT'
+
+apply plugin: 'java'
+
+sourceCompatibility = 1.5
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.11'
+    compile group: 'com.google.guava', name: 'guava', version: '19.0'
+    compile group: 'io.netty', name: 'netty-buffer', version: '4.0.36.Final'
+}
