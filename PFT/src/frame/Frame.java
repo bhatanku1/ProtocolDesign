@@ -1,5 +1,6 @@
 package frame;
 
-public class Frame {
+import java.io.Serializable;
 
+public interface Frame extends Serializable  {
 }

@@ -2,7 +2,7 @@ package data;
 
 import frame.Frame;
 
-public class DataRequest extends Frame {
+public class DataRequest implements Frame {
 	private long offset;
 	private long length;
 	private int type;

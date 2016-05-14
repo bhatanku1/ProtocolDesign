@@ -2,7 +2,7 @@ package download;
 
 import frame.Frame;
 
-public class DownloadResponse extends Frame {
+public class DownloadResponse implements Frame {
 	private int status;
 	private int type;
 	private int port;

@@ -2,7 +2,7 @@ package upload;
 
 import frame.Frame;
 
-public class UploadRequest extends Frame {
+public class UploadRequest implements Frame {
 	private int type;
 	private String identifier;
 	private String fileName;

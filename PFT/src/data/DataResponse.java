@@ -2,7 +2,7 @@ package data;
 
 import frame.Frame;
 
-public class DataResponse extends Frame {
+public class DataResponse implements Frame {
 	private long offset;
 	private long length;
 	private String payload;

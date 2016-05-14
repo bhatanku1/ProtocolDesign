@@ -2,7 +2,7 @@ package shutdown;
 
 import frame.Frame;
 
-public class ShutdownRequest extends Frame{
+public class ShutdownRequest implements Frame{
 	private int type;
 	public ShutdownRequest() {
 		this.type = 9;

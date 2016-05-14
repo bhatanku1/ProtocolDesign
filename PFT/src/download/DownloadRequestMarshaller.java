@@ -10,10 +10,4 @@ public class DownloadRequestMarshaller implements Marshaller<DownloadRequest> {
 		return null;
 	}
 
-	@Override
-	public byte[] encode(DownloadRequest t) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
 }

@@ -2,7 +2,7 @@ package upload;
 
 import frame.Frame;
 
-public class UploadResponse extends Frame{
+public class UploadResponse implements Frame{
 	private int type;
 	private int port;
 	private int status;

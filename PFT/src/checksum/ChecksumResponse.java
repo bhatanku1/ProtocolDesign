@@ -2,7 +2,7 @@ package checksum;
 
 import frame.Frame;
 
-public class ChecksumResponse extends Frame {
+public class ChecksumResponse implements Frame {
 	private int type;
 	private long offset;
 	private long length;

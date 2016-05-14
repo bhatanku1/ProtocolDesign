@@ -2,7 +2,7 @@ package download;
 
 import frame.Frame;
 
-public class DownloadRequest extends Frame {
+public class DownloadRequest implements Frame {
 	private int type;
 	private String fileName;
 	private String sha;
