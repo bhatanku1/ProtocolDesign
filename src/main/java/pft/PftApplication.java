@@ -11,7 +11,7 @@ public class PftApplication {
         // If client start client.
         String command = "upload";
         String Filename;
-        Client client = new Client(command, "Filename");
+        Client client = new Client(command, "C:\\Users\\ankur\\test.txt");
 
     }
 }
