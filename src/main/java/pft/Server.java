@@ -25,12 +25,14 @@ import static java.lang.System.exit;
 public class Server implements Runnable {
 
     private  DatagramSocket datagramSocket;
+    private final ExecutorService pool;
     private final Deframer deframer;
     private final Framer framer;
     private Random rand;
 
     public Server(int port, int poolSize)
     {
+        pool = Executors.newFixedThreadPool(poolSize);
         try {
             datagramSocket = new DatagramSocket(port);
 
@@ -56,21 +58,37 @@ public class Server implements Runnable {
                 if(f instanceof DownloadRequest || f instanceof UploadRequest)
                 {
                     int identifier = rand.nextInt();
-                    ClientManager manager = new ClientManager(packet.getAddress(), packet.getPort(), identifier);
+                    ClientManager manager ;
+                    Frame response;
+                    byte[] responseBuffer;
+                    if(f instanceof DownloadRequest)
+                    {
+                        manager = new ClientManager(packet.getAddress(), packet.getPort(), identifier, f, true);
+                        response = manager.createDownloadResponse((DownloadRequest)f);
+                        if(((DownloadResponse)response).status() == Status.OK || ((DownloadResponse)response).status() == Status.HASH_NOT_EQUAL)
+                            pool.execute(manager);
+                        /*else
+                            manager.dispose;*/
+                        responseBuffer = framer.frame(response);
+                    }
+                    else
+                    {
+                        manager = new ClientManager(packet.getAddress(), packet.getPort(), identifier, f, false);
+                        response = manager.createUploadResponse((UploadRequest) f);
+                        if(((UploadResponse)response).status() == Status.OK)
+                            pool.execute(manager);
+                        /*
+                        * else
+                        * manager.dispose*/
+                        responseBuffer = framer.frame(response);
+                    }
+                    packet = new DatagramPacket(responseBuffer, responseBuffer.length, packet.getAddress(), packet.getPort());
+                    datagramSocket.send(packet);
+
                 }
             }
         } catch (IOException ex) {
 
         }
-    }
-
-    private static boolean isByteArrayAllZero(byte[] data)
-    {
-        for (byte b : data) {
-            if (b != 0) {
-                return false;
-            }
-        }
-        return true;
     }
 }

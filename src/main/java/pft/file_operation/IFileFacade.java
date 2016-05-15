@@ -14,4 +14,5 @@ public interface IFileFacade {
     public int writeFromPosition(int offset, int length, byte[] data);
     public long getSize();
     public boolean fileExits();
+    public String getFileName();
 }

@@ -181,16 +181,6 @@ public class PftFileManager implements IFileFacade {
         return OpenFileOperationStatus.NO_SUCH_HASH_ALGORITHM;
     }
 
-    private static String getFileNameFromPath(String path)
-    {
-        if(null == path || path.isEmpty())
-            return null;
-
-        String pattern = Pattern.quote(System.getProperty("file.separator"));
-        String[] splittedFileName = path.split(pattern);
-
-        return splittedFileName[splittedFileName.length -1];
-    }
 
     public byte[] readFromPosition(int offset, int length)
     {
@@ -256,4 +246,19 @@ public class PftFileManager implements IFileFacade {
         return true;
     }
 
+    public String getFileName()
+    {
+        return this.path_to_file.toString();
+    }
+
+    private static String getFileNameFromPath(String path)
+    {
+        if(null == path || path.isEmpty())
+            return null;
+
+        String pattern = Pattern.quote(System.getProperty("file.separator"));
+        String[] splittedFileName = path.split(pattern);
+
+        return splittedFileName[splittedFileName.length -1];
+    }
 }
