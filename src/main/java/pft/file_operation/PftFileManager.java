@@ -34,7 +34,7 @@ public class PftFileManager implements IFileFacade {
     {
         if(Files.notExists(this.path_to_file))
             return null;
-        else if(Files.isReadable(this.path_to_file))
+        else if(!Files.isReadable(this.path_to_file))
             return null;
 
         //add more features later
@@ -57,6 +57,7 @@ public class PftFileManager implements IFileFacade {
                         sha1.update(buffer, 0, n);
                     }
                 }
+                fis.close();
                 return sha1.digest();
             }
             catch (NoSuchAlgorithmException ex)
@@ -76,17 +77,12 @@ public class PftFileManager implements IFileFacade {
         return  null;
     }
 
-    public byte[] getDataBytes(int offset, int length)
-    {
-        return new byte[0];
-    }
-
     public OpenFileOperationStatus fileMatchDescription(byte[] hash, String hashAlgo)
     {
         if(Files.notExists(this.path_to_file))
             return OpenFileOperationStatus.FILE_DOES_NOT_EXIST;
-        /*else if(Files.isReadable(this.path_to_file))
-            return OpenFileOperationStatus.ACCESS_RESTRICTED;*/
+        else if(!Files.isReadable(this.path_to_file))
+            return OpenFileOperationStatus.ACCESS_RESTRICTED;
 
         //add more features later
         if(null == hashAlgo || hashAlgo.isEmpty())
@@ -108,6 +104,7 @@ public class PftFileManager implements IFileFacade {
                         sha1.update(buffer, 0, n);
                     }
                 }
+                fis.close();
                 originalFileHash=  sha1.digest();
             }
             catch (NoSuchAlgorithmException ex)
@@ -136,7 +133,7 @@ public class PftFileManager implements IFileFacade {
     {
         if(Files.notExists(this.path_to_file))
             return OpenFileOperationStatus.FILE_DOES_NOT_EXIST;
-        else if(Files.isReadable(this.path_to_file))
+        else if(!Files.isReadable(this.path_to_file))
             return OpenFileOperationStatus.ACCESS_RESTRICTED;
 
         if(hashAlgo.compareTo("SHA-1") == 0)
@@ -145,17 +142,20 @@ public class PftFileManager implements IFileFacade {
             try
             {
                 MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-                InputStream fis = Files.newInputStream(this.path_to_file, StandardOpenOption.READ);
+                RandomAccessFile raf = new RandomAccessFile(new File(this.path_to_file.toString()), "r");
+                raf.seek(offset);
+                /*InputStream fis = Files.newInputStream(this.path_to_file, StandardOpenOption.READ);*/
                 int n = 0;
                 byte[] buffer = new byte[8192];
-                fis.read(buffer, offset, 8192);
-                sha1.update(buffer, 0, n);
+                /*fis.read(buffer, offset, 8192);
+                sha1.update(buffer, 0, n);*/
                 while (n != -1) {
-                    n = fis.read(buffer);
+                    n = raf.read(buffer);
                     if (n > 0) {
                         sha1.update(buffer, 0, n);
                     }
                 }
+                raf.close();
                 originalFileHash=  sha1.digest();
 
             }
@@ -191,4 +191,69 @@ public class PftFileManager implements IFileFacade {
 
         return splittedFileName[splittedFileName.length -1];
     }
+
+    public byte[] readFromPosition(int offset, int length)
+    {
+        /*assuming that file has already been verified with fileMatchDescription*/
+        try
+        {
+            RandomAccessFile raf = new RandomAccessFile(new File(this.path_to_file.toString()), "r");
+            raf.seek(offset);
+            byte[] buffer = new byte[length];
+            raf.read(buffer, offset, length);
+            raf.close();
+            return buffer;
+        }
+        catch (FileNotFoundException fex)
+        {
+            return null;
+        }catch (IOException ioex)
+        {
+                /*need to change this*/
+            return null;
+        }
+
+    }
+    public int writeFromPosition(int offset, int length, byte[] data)
+    {
+         /*assuming that file has already been verified with fileMatchDescription*/
+        try
+        {
+            RandomAccessFile raf = new RandomAccessFile(new File(this.path_to_file.toString()), "w");
+            raf.seek(offset);
+            raf.write(data);
+            raf.close();
+            return offset+length;
+        }
+        catch (FileNotFoundException fex)
+        {
+            return offset;
+        }catch (IOException ioex)
+        {
+                /*need to change this*/
+            return offset;
+        }
+    }
+
+    public long getSize()
+    {
+        if(Files.notExists(this.path_to_file))
+            return 0;
+        else if(!Files.isReadable(this.path_to_file))
+            return 0;
+
+        File file = new File(this.path_to_file.toString());
+        return file.length();
+    }
+
+    public boolean fileExits()
+    {
+        if(Files.notExists(this.path_to_file))
+            return false;
+        if(!Files.isReadable(this.path_to_file))
+            return false;
+
+        return true;
+    }
+
 }

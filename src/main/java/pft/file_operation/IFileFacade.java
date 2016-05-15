@@ -8,7 +8,10 @@ package pft.file_operation;
 public interface IFileFacade {
 
     public byte[] getHash(String hashAlgo, int offset, int length);
-    public byte[] getDataBytes(int offset, int length);
     public OpenFileOperationStatus fileMatchDescription(byte[] hash, String hashAlgo);
     public OpenFileOperationStatus fileMatchDescription(byte[] hash, String hashAlgo, int offset, int length);
+    public byte[] readFromPosition(int offset, int length);
+    public int writeFromPosition(int offset, int length, byte[] data);
+    public long getSize();
+    public boolean fileExits();
 }
