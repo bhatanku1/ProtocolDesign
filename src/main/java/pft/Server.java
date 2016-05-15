@@ -12,10 +12,7 @@ import pft.frames.Frame;
 
 import java.awt.*;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
+import java.net.*;
 import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
@@ -37,11 +34,11 @@ public class Server implements Runnable {
         try {
             datagramSocket = new DatagramSocket(port);
 
-
         } catch (SocketException e) {
             e.printStackTrace();
             exit(1);
         }
+
 
         deframer = new Deframer();
         framer = new Framer();
@@ -49,48 +46,51 @@ public class Server implements Runnable {
     }
 
     public void run() {
-        try {
+    System.out.println("Start Server");
             for (;;) {
-                byte[] packetbuffer = new byte[512]; //check what happens if datagram is larger tha 512
-                DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
-                datagramSocket.receive(packet);
-                int length = packet.getLength();
-                byte[] data = Arrays.copyOf(packet.getData(), length);
-                Frame f = deframer.deframe(data);
-                if(f instanceof DownloadRequest || f instanceof UploadRequest)
-                {
-                    int identifier = rand.nextInt();
-                    ClientManager manager ;
-                    Frame response;
-                    byte[] responseBuffer;
-                    if(f instanceof DownloadRequest)
+                try {
+                    byte[] packetbuffer = new byte[512]; //check what happens if datagram is larger tha 512
+                    DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
+                    datagramSocket.receive(packet);
+                    System.out.println("Received packet");
+                    int length = packet.getLength();
+                    byte[] data = Arrays.copyOf(packet.getData(), length);
+                    Frame f = deframer.deframe(data);
+                    if(f instanceof DownloadRequest || f instanceof UploadRequest)
                     {
-                        manager = new ClientManager(packet.getAddress(), packet.getPort(), identifier, f, true);
-                        response = manager.createDownloadResponse((DownloadRequest)f);
-                        if(((DownloadResponse)response).status() == Status.OK || ((DownloadResponse)response).status() == Status.HASH_NOT_EQUAL)
-                            pool.execute(manager);
+                        int identifier = rand.nextInt();
+                        ClientManager manager ;
+                        Frame response;
+                        byte[] responseBuffer;
+                        if(f instanceof DownloadRequest)
+                        {
+                            manager = new ClientManager(packet.getAddress(), packet.getPort(), identifier, f, true);
+                            response = manager.createDownloadResponse((DownloadRequest)f);
+                            if(((DownloadResponse)response).status() == Status.OK || ((DownloadResponse)response).status() == Status.HASH_NOT_EQUAL)
+                                pool.execute(manager);
                         /*else
                             manager.dispose;*/
-                        responseBuffer = framer.frame(response);
-                    }
-                    else
-                    {
-                        manager = new ClientManager(packet.getAddress(), packet.getPort(), identifier, f, false);
-                        response = manager.createUploadResponse((UploadRequest) f);
-                        if(((UploadResponse)response).status() == Status.OK)
-                            pool.execute(manager);
+                            responseBuffer = framer.frame(response);
+                        }
+                        else
+                        {
+                            manager = new ClientManager(packet.getAddress(), packet.getPort(), identifier, f, false);
+                            response = manager.createUploadResponse((UploadRequest) f);
+                            if(((UploadResponse)response).status() == Status.OK)
+                                pool.execute(manager);
                         /*
                         * else
                         * manager.dispose*/
-                        responseBuffer = framer.frame(response);
-                    }
+                            responseBuffer = framer.frame(response);
+                        }
                     packet = new DatagramPacket(responseBuffer, responseBuffer.length, packet.getAddress(), packet.getPort());
                     datagramSocket.send(packet);
 
+                    }
+                } catch (IOException ex) {
+                    System.out.println("Exception occured while receiving client request. Stack : "+ex.getStackTrace()+" Message: " + ex.getMessage());
                 }
             }
-        } catch (IOException ex) {
 
-        }
     }
 }

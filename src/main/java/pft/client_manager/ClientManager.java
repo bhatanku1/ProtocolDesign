@@ -9,6 +9,7 @@ import pft.file_operation.OpenFileOperationStatus;
 import pft.file_operation.PftFileManager;
 import pft.frames.*;
 
+import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -41,6 +42,26 @@ public class ClientManager implements Runnable {
     public void run()
     {
         System.out.println("Executed thread for listening to client IP: "+ clinetAddress.toString()+ " Port: "+clientPort + "Request for "+ fileManager.getFileName());
+
+        if(isDownloadOperation)
+        {
+            for(;;) {
+                byte[] packetbuffer = new byte[32]; //check what happens if datagram is larger tha 512
+                DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
+                try
+                {
+                    this.sock.receive(packet);
+                }
+                catch (IOException ex)
+                {
+                    System.out.println("Exception occured in client manager");
+                }
+            }
+        }
+        else
+        {
+
+        }
     }
 
     public DownloadResponse createDownloadResponse(DownloadRequest request)
