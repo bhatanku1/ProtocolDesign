@@ -17,7 +17,8 @@ public class DataResponseMarshaller implements Marshaller<DataResponse> {
 
   private static final int LENGTH = OFFSET_LENGTH + LENGTH_LENGTH;
 
-  @Override public DataResponse decode(int identifier, byte[] data) {
+  @Override
+  public DataResponse decode(int identifier, byte[] data) {
     checkArgument(identifier != 0);
     checkNotNull(data);
     // fixed length + variable payload

@@ -11,7 +11,8 @@ public class DataRequest extends Frame {
     this.length = length;
   }
 
-  @Override public byte type() {
+  @Override
+  public byte type() {
     return 5;
   }
 

@@ -19,7 +19,8 @@ public class ChecksumResponseMarshaller implements Marshaller<ChecksumResponse> 
 
   private static final int LENGTH = OFFSET_LENGTH + LENGTH_LENGTH + SHA1_LENGTH;
 
-  @Override public ChecksumResponse decode(int identifier, byte[] data) {
+  @Override
+  public ChecksumResponse decode(int identifier, byte[] data) {
     checkArgument(identifier != 0);
     checkNotNull(data);
     checkArgument(data.length == LENGTH);
