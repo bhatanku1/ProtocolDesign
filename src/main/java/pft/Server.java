@@ -16,6 +16,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,10 +51,11 @@ public class Server implements Runnable {
     public void run() {
         try {
             for (;;) {
-                byte[] packetbuffer = new byte[8192];
+                byte[] packetbuffer = new byte[512]; //check what happens if datagram is larger tha 512
                 DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
                 datagramSocket.receive(packet);
-                byte[] data = packet.getData();
+                int length = packet.getLength();
+                byte[] data = Arrays.copyOf(packet.getData(), length);
                 Frame f = deframer.deframe(data);
                 if(f instanceof DownloadRequest || f instanceof UploadRequest)
                 {
