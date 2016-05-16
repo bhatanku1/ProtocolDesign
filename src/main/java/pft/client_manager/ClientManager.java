@@ -19,6 +19,7 @@ import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.Future;
@@ -40,6 +41,7 @@ public class ClientManager implements Runnable {
     private volatile List<DataRequest> pendingPackets;
     private volatile LinkedBlockingQueue<Frame> incomingFrames;
     private volatile long currentOffset;
+    private long fileSize;
 
     public ClientManager(InetAddress address, int clientPort, int identifier, Frame requestFrame, boolean isDownload) throws java.net.SocketException
     {
@@ -53,6 +55,7 @@ public class ClientManager implements Runnable {
         this.isDownloadOperation = isDownload;
 
         String fileName = getFileName(requestFrame);
+        fileSize = getFileSize(requestFrame);
         fileManager = new PftFileManager(fileName);
         pftFileManager = new PftFileManager(fileName + ".pft");
 
@@ -82,7 +85,7 @@ public class ClientManager implements Runnable {
 
             final ExecutorService executor = Executors.newFixedThreadPool(4);
             pendingPackets = Collections.synchronizedList(new ArrayList<DataRequest>());
-            incomingFrames= new LinkedBlockingQueue<Frame>(64);
+            incomingFrames= new LinkedBlockingQueue<Frame>(8);
 
             Future receivePacketFuture = executor.submit(new Runnable() {
                 public void run() {
@@ -113,6 +116,7 @@ public class ClientManager implements Runnable {
 
             Future sendRequestFuture = executor.submit(new Runnable() {
                 public void run() {
+                    System.out.println("Send data request Thread started");
                     /*check if partial file exist*/
                     if(pftFileManager.fileExits())
                     {
@@ -122,18 +126,17 @@ public class ClientManager implements Runnable {
                     else {
                         currentOffset = 0;
                     }
-                    long filesize = fileManager.getSize();
                     for(;;) //this forloop keep sending requests till termination is received for file size is reached
                     {
-                        if(currentOffset< filesize)
+                        if(currentOffset< fileSize)
                         {
-                            if(pendingPackets.size() < 32)
+                            if(pendingPackets.size() < 4)//change this to allow to send multiple requests even when previous requests were not fulfilled
                             {
-                                boolean isLessThanDefaultSize = ((filesize - currentOffset) / defaultPacketSize) == 0 ? true:false;
+                                boolean isLessThanDefaultSize = ((fileSize - currentOffset) / defaultPacketSize) == 0 ? true:false;
                                 if(isLessThanDefaultSize)
                                 {
-                                    DataRequest request = new DataRequest(identifier, currentOffset, (filesize - currentOffset));
-                                    currentOffset = filesize;
+                                    DataRequest request = new DataRequest(identifier, currentOffset, (fileSize - currentOffset));
+                                    currentOffset = fileSize;
                                     System.out.println("Send Request for last packet");
                                     //add to pending packet dqueue
                                     pendingPackets.add(request);
@@ -141,7 +144,7 @@ public class ClientManager implements Runnable {
                                 else
                                 {
                                     int remainingWindow = 32 - pendingPackets.size();
-                                    long remainingPackets = ((filesize - currentOffset) / defaultPacketSize) >=4 ? 4 : ((filesize - currentOffset) / defaultPacketSize);
+                                    long remainingPackets = ((fileSize - currentOffset) / defaultPacketSize) >=4 ? 4 : ((fileSize - currentOffset) / defaultPacketSize);
 
                                     long packetsToSend = remainingWindow>remainingPackets ? remainingPackets:remainingWindow;
                                     DataRequest request = new DataRequest(identifier, currentOffset, 4*packetsToSend);
@@ -253,12 +256,12 @@ public class ClientManager implements Runnable {
 
             Future resendRequestFuture = executor.submit(new Runnable() {
                 public void run() {
+                    System.out.println("Resend packet Thread started");
                     DatagramPacket packet;
                     byte[] responseBuffer;
-                    long filesize = fileManager.getSize();
                     for(;;)
                     {
-                        if(pendingPackets.size() == 0 && (currentOffset == filesize))
+                        if(pendingPackets.size() == 0 && (currentOffset == fileSize))
                         {
                             System.out.println("No more packets to resend. Will shut down thread");
                             break;
@@ -301,6 +304,8 @@ public class ClientManager implements Runnable {
                 System.out.println("Exception Awaiting termination of task. Identifier : "+ identifier +". Process will end now");
             }
         }
+        System.out.println("Closing socket . Identifier : "+identifier);
+        sock.close();
     }
 
     public DownloadResponse createDownloadResponse(DownloadRequest request)
@@ -340,7 +345,30 @@ public class ClientManager implements Runnable {
 
     public UploadResponse createUploadResponse(UploadRequest request)
     {
-        return null;
+        //check disk space
+        //check if file exists by same name. Delete old file and its pft for now
+        //check pft
+        if(pftFileManager.fileExits())
+        {
+            byte[] hash = readHashFromPftFile();
+            boolean allowUpload = true;
+            if(!Arrays.equals(request.sha1(), hash))
+                allowUpload = false;  //change this logic to delete old file
+            long offset = readOffsetFromPftFile();
+            UploadResponse response = new UploadResponse(identifier, allowUpload?Status.OK:Status.ERROR, sock.getPort());
+            return response;
+        }
+        else
+        {
+            byte[] offset = ByteBuffer.allocate(4).putInt(0).array();
+            writeOffsetInPftFile(offset);
+            writeHashInPftFile(request.sha1());
+            byte[] size = ByteBuffer.allocate(8).putLong(request.size()).array();
+            writeSizeInPftFile(size);
+
+            UploadResponse response = new UploadResponse(identifier, Status.OK, sock.getPort());
+            return response;
+        }
     }
 
     private String getFileName(Frame frame)
@@ -353,6 +381,40 @@ public class ClientManager implements Runnable {
             return  null;
     }
 
+    private long getFileSize(Frame frame)
+    {
+        if(frame instanceof UploadRequest)
+            return ((UploadRequest)frame).size();
+        else return 0;
+    }
+
+    //Assume always sha-1. so hash is 4 bytes
+    private void writeHashInPftFile(byte[] hash)
+    {
+        pftFileManager.writeFromPosition(5, 20, hash);
+    }
+    private byte[] readHashFromPftFile()
+    {
+        return pftFileManager.readFromPosition(5, 20);
+    }
+    private void writeOffsetInPftFile(byte[] offset)
+    {
+        pftFileManager.writeFromPosition(0, 4, offset);
+    }
+    private int readOffsetFromPftFile()
+    {
+        ByteBuffer bb = ByteBuffer.wrap(pftFileManager.readFromPosition(0, 4));
+        return bb.getInt();
+    }
+    private void writeSizeInPftFile(byte[] size)
+    {
+        pftFileManager.writeFromPosition(26, 8, size);
+    }
+    private long readSizeFromPftFile()
+    {
+        ByteBuffer bb = ByteBuffer.wrap(pftFileManager.readFromPosition(26, 8));
+        return bb.getLong();
+    }
     /*private void Send()
     {
         int currentOffSet= 0;

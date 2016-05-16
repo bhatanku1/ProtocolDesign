@@ -22,11 +22,11 @@ public class PftFileManager implements IFileFacade {
         String pattern = Pattern.quote(fileSeparator);
         String[] splittedFileName = path.split(pattern);
 
-        String directory =  "";
-        for(int i = 0; i < splittedFileName.length - 1; i++ )
+        String directory =  "D:\\pft\\server";
+        /*for(int i = 0; i < splittedFileName.length - 1; i++ )
         {
             directory += (splittedFileName[i] + fileSeparator);
-        }
+        }*/
         path_to_file = FileSystems.getDefault().getPath( directory, splittedFileName[splittedFileName.length-1]);
     }
 
@@ -246,6 +246,17 @@ public class PftFileManager implements IFileFacade {
             return false;
 
         return true;
+    }
+
+    public boolean deleteFile()
+    {
+        if(fileExits())
+        {
+            File f = new File(path_to_file.getFileName().toString());
+            return f.delete();
+        }
+        else
+            return true;
     }
 
     public String getFileName()

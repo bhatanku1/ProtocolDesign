@@ -15,4 +15,5 @@ public interface IFileFacade {
     public long getSize();
     public boolean fileExits();
     public String getFileName();
+    public boolean deleteFile();
 }
