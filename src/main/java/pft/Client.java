@@ -4,7 +4,9 @@ import pft.file_operation.IFileFacade;
 import pft.file_operation.PftFileManager;
 import pft.frames.*;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.net.*;
 import java.util.Arrays;
 
@@ -12,16 +14,20 @@ import java.util.Arrays;
  * Created by ankur on 15.05.2016.
  */
 public class Client {
-    byte[] payload;
-    IFileFacade fileManager;
-    long fileSize;
-    byte[] sha1;
-    UploadRequest uploadRequest;
-    DownloadRequest downloadRequest;
-    String command;
+    private byte[] payload;
+    private IFileFacade fileManager;
+    private long fileSize;
+    private byte[] sha1;
+    private UploadRequest uploadRequest;
+    private DownloadRequest downloadRequest;
+    private String command;
+    private String fileName;
+    private DatagramSocket datagramSocket = null;
+    private InetAddress receiverAddress = null;
 
     public Client(String command, String fileName) {
         this.command = command;
+        this.fileName = fileName;
        fileManager = new PftFileManager(fileName);
         if(fileManager.fileExits() == false) {
             System.out.println("File does not exists");
@@ -60,7 +66,7 @@ public class Client {
         byte [] response = new byte[512];
         Frame frame = null;
         Deframer deframer = new Deframer();
-        DatagramSocket datagramSocket = null;
+
         try {
             datagramSocket = new DatagramSocket();
         } catch (SocketException e) {
@@ -68,7 +74,6 @@ public class Client {
             e.printStackTrace();
         }
 
-        InetAddress receiverAddress = null;
         try {
             receiverAddress = InetAddress.getLocalHost();
         } catch (UnknownHostException e) {
@@ -89,7 +94,7 @@ public class Client {
                 //Start upload process
 
                 System.out.println("Upload Request Accepted");
-                UploadProcess();
+                UploadProcess(frame);
             }
             else if(command.equals("download") && ((DownloadResponse) frame).status() == Status.OK) {
                 //Start Download process
@@ -104,11 +109,77 @@ public class Client {
             e.printStackTrace();
         }
     }
-    public void UploadProcess(){
+    public void UploadProcess(Frame frame){
         System.out.println("Starting upload...");
+        DataResponse dataResponse;
+        long offset;
+        long lengthDataToBeSend;
+        int lengthDataRequestPacket;
+        long window;
+        long fileLeft = fileSize;
+        int readBytes = 4096;
+        byte [] dataFromFile;
+        byte [] dataRequest = new byte[512];
+        byte [] dataPayload = new byte[5004];
+
+        int i;
+        Framer framer = new Framer();
+        Frame frameDataRequest = null;
+        Deframer deframer = new Deframer();
+        int port = ((UploadResponse) frame).port();
+
+        DatagramPacket dataRequestPacket = new DatagramPacket(dataRequest, dataRequest.length);
+        DatagramPacket dataResponsePacket ;
+
+        try {
+            datagramSocket.setSoTimeout(10000);
+        } catch (SocketException e) {
+            //
+            e.printStackTrace();
+        }
+        while(true){
+            try {
+                datagramSocket.receive(dataRequestPacket);
+                lengthDataRequestPacket = dataRequestPacket.getLength();
+                byte[] dataBufferRequest = Arrays.copyOf(dataRequestPacket.getData(), lengthDataRequestPacket);
+                frameDataRequest = deframer.deframe(dataBufferRequest);
+                if(frameDataRequest.type() != 5) {
+                    throw new Exception("Incorrect Frame Type");
+                }
+                else if(frameDataRequest.type() == 9) {
+
+                    //file uploaded successfully; This is a terminating packet
+                    break;
+                }
+                offset = ((DataRequest) frame).offset();
+                lengthDataToBeSend =  ((DataRequest) frame).length();
+                window = lengthDataToBeSend / 4096;
+               if(window == 0) {
+                   window = 1;
+                   readBytes = (int)lengthDataToBeSend;
+
+               }
+                for (i = 0; i< window; i++) {
+                    dataFromFile = fileManager.readFromPosition((int)(offset),readBytes);
+                    dataResponse = new DataResponse(((UploadResponse) frame).identifier(),offset, readBytes, dataFromFile);
+                    dataPayload = framer.frame(dataResponse);
+                    dataResponsePacket = new DatagramPacket(dataPayload, dataPayload.length, receiverAddress, ((UploadResponse)frame).port());
+                    datagramSocket.send(dataResponsePacket);
+                    offset += 4096;
+                }
+
+            }    catch (IOException e) {
+                e.printStackTrace();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+
+        }
 
     }
     public void DownloadProcess() {
+
 
     }
 

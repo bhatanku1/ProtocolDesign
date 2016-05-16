@@ -45,14 +45,14 @@ public class Server {
         //Check space in disk
         //if condition fullfilled, create pft file if not created before, write sha and offset=0
         IFileFacade fileManager;
-        fileManager = new PftFileManager(((UploadRequest) frame).filename() + "pft");
+        fileManager = new PftFileManager(((UploadRequest) frame).filename() + ".pft");
         if(fileManager.fileExits() == false){
             //Create a file
             //write sha
             //offset 0
 
             try {
-                RandomAccessFile raf = new RandomAccessFile(((UploadRequest) frame).filename() + "pft", "rw");
+                RandomAccessFile raf = new RandomAccessFile(((UploadRequest) frame).filename() + ".pft", "rw");
                 String originalString = ((UploadRequest) frame).sha1() + " \n0 \n";
                 String updatedString = originalString.replace("\n","\r\n");
                 raf.writeBytes(updatedString);
@@ -77,10 +77,24 @@ public class Server {
     public int GetIdentifier(){
         return 12;
     }
-    public void PrepareUpload() {
-        byte[] b;
-        //Check the status of the file in the filename.pft
-    }
+    public void PrepareUpload(Frame frame) {
+        byte[] dataResponse;
+        String line;
+        //Read the .pft file and get the offset
+        IFileFacade fileManager;
+        try {
+            RandomAccessFile raf = new RandomAccessFile(((UploadRequest) frame).filename() + ".pft", "rw");
+            line = raf.readLine();
+            line = raf.readLine();
+
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+   }
     public static void main(String [] args) {
         Server server = new Server();
         Framer framer = new Framer();
