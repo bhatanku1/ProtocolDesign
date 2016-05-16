@@ -11,7 +11,7 @@ public interface IFileFacade {
     public OpenFileOperationStatus fileMatchDescription(byte[] hash, String hashAlgo);
     public OpenFileOperationStatus fileMatchDescription(byte[] hash, String hashAlgo, int offset, int length);
     public byte[] readFromPosition(int offset, int length);
-    public int writeFromPosition(int offset, int length, byte[] data);
+    public long writeFromPosition(long offset, long length, byte[] data);
     public long getSize();
     public boolean fileExits();
     public String getFileName();

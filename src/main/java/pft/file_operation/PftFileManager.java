@@ -196,15 +196,16 @@ public class PftFileManager implements IFileFacade {
         }
         catch (FileNotFoundException fex)
         {
+            fex.printStackTrace();
             return null;
         }catch (IOException ioex)
         {
-                /*need to change this*/
+            ioex.printStackTrace();
             return null;
         }
 
     }
-    public int writeFromPosition(int offset, int length, byte[] data)
+    public long writeFromPosition(long offset, long length, byte[] data)
     {
          /*assuming that file has already been verified with fileMatchDescription*/
         try
@@ -217,10 +218,11 @@ public class PftFileManager implements IFileFacade {
         }
         catch (FileNotFoundException fex)
         {
+            fex.printStackTrace();
             return offset;
         }catch (IOException ioex)
         {
-                /*need to change this*/
+            ioex.printStackTrace();
             return offset;
         }
     }

@@ -47,10 +47,11 @@ public class Server implements Runnable {
 
     public void run() {
     System.out.println("Start Server");
+        byte[] packetbuffer = new byte[512]; //check what happens if datagram is larger tha 512
+        DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
             for (;;) {
                 try {
-                    byte[] packetbuffer = new byte[512]; //check what happens if datagram is larger tha 512
-                    DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
+
                     datagramSocket.receive(packet);
                     System.out.println("Received packet");
                     int length = packet.getLength();

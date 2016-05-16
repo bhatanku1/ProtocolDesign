@@ -15,7 +15,7 @@ public class Deframer {
   private static final PooledByteBufAllocator ALLOCATOR =
       PooledByteBufAllocator.DEFAULT;
 
-  Frame deframe(byte[] data) {
+  public Frame deframe(byte[] data) {
     checkNotNull(data);
     checkArgument(data.length > 7);
     checkArgument(data.length < (2 << 16));
