@@ -22,7 +22,7 @@ public class PftFileManager implements IFileFacade {
         String pattern = Pattern.quote(fileSeparator);
         String[] splittedFileName = path.split(pattern);
 
-        String directory =  "D:\\pft\\server";
+        String directory =  "/home/rabbiddog/pft/server";
         /*for(int i = 0; i < splittedFileName.length - 1; i++ )
         {
             directory += (splittedFileName[i] + fileSeparator);
@@ -190,7 +190,7 @@ public class PftFileManager implements IFileFacade {
             RandomAccessFile raf = new RandomAccessFile(new File(this.path_to_file.toString()), "r");
             raf.seek(offset);
             byte[] buffer = new byte[length];
-            raf.read(buffer, offset, length);
+            raf.read(buffer, 0, length);
             raf.close();
             return buffer;
         }
@@ -210,7 +210,7 @@ public class PftFileManager implements IFileFacade {
          /*assuming that file has already been verified with fileMatchDescription*/
         try
         {
-            RandomAccessFile raf = new RandomAccessFile(new File(this.path_to_file.toString()), "w");
+            RandomAccessFile raf = new RandomAccessFile(new File(this.path_to_file.toString()), "rw");
             raf.seek(offset);
             raf.write(data);
             raf.close();

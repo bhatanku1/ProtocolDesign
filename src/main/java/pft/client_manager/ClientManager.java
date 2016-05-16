@@ -40,8 +40,8 @@ public class ClientManager implements Runnable {
     private final int defaultPacketSize = 4096;
     private volatile List<DataRequest> pendingPackets;
     private volatile LinkedBlockingQueue<Frame> incomingFrames;
-    private volatile long currentOffset;
-    private long fileSize;
+    private volatile int currentOffset;
+    private int fileSize;
 
     public ClientManager(InetAddress address, int clientPort, int identifier, Frame requestFrame, boolean isDownload) throws java.net.SocketException
     {
@@ -51,6 +51,7 @@ public class ClientManager implements Runnable {
         this.deframer = new Deframer();
 
         this.sock = new DatagramSocket();
+        System.out.println("Client Manager socket creation"+ sock.getLocalPort());
         this.identifier = identifier;
         this.isDownloadOperation = isDownload;
 
@@ -100,7 +101,17 @@ public class ClientManager implements Runnable {
                             byte[] data = Arrays.copyOf(packet.getData(), length);
                             Frame f = deframer.deframe(data);
                             if(f.identifier() == identifier)
+                            {
+                                System.out.println("Reveiced packet with correct identifier. Putting into incoming frames");
+                                System.out.println("Incoming frame count before"+incomingFrames.size());
                                 incomingFrames.offer(f, 20, TimeUnit.MILLISECONDS);
+                                System.out.println("Incoming frame count after"+incomingFrames.size());
+                            }
+                            else
+                            {
+                                System.out.println("Reveiced packet with incorrect identifier. Putting into incoming frames");
+                            }
+
 
                         }catch (IOException ex)
                         {
@@ -118,10 +129,11 @@ public class ClientManager implements Runnable {
                 public void run() {
                     System.out.println("Send data request Thread started");
                     /*check if partial file exist*/
+                    DatagramPacket packet;
+                    byte[] responseBuffer;
                     if(pftFileManager.fileExits())
                     {
-                        //TODO
-                        currentOffset = 0; //find the actual offset
+                        currentOffset = readOffsetFromPftFile(); //find the actual offset
                     }
                     else {
                         currentOffset = 0;
@@ -130,38 +142,52 @@ public class ClientManager implements Runnable {
                     {
                         if(currentOffset< fileSize)
                         {
-                            if(pendingPackets.size() < 4)//change this to allow to send multiple requests even when previous requests were not fulfilled
+                            if(pendingPackets.size() == 0)//change this to allow to send multiple requests even when previous requests were not fulfilled
                             {
-                                boolean isLessThanDefaultSize = ((fileSize - currentOffset) / defaultPacketSize) == 0 ? true:false;
-                                if(isLessThanDefaultSize)
+                                try
                                 {
-                                    DataRequest request = new DataRequest(identifier, currentOffset, (fileSize - currentOffset));
-                                    currentOffset = fileSize;
-                                    System.out.println("Send Request for last packet");
-                                    //add to pending packet dqueue
-                                    pendingPackets.add(request);
-                                }
-                                else
-                                {
-                                    int remainingWindow = 32 - pendingPackets.size();
-                                    long remainingPackets = ((fileSize - currentOffset) / defaultPacketSize) >=4 ? 4 : ((fileSize - currentOffset) / defaultPacketSize);
+                                    boolean isLessThanDefaultSize = ((fileSize - currentOffset) / defaultPacketSize) == 0 ? true:false;
+                                    if(isLessThanDefaultSize)
+                                    {
+                                        DataRequest request = new DataRequest(identifier, currentOffset, (fileSize - currentOffset));
+                                        currentOffset = fileSize;
+                                        System.out.println("Send Request for last packet");
+                                        responseBuffer = framer.frame(request);
+                                        packet = new DatagramPacket(responseBuffer, responseBuffer.length, clinetAddress, clientPort);
+                                        sock.send(packet);
+                                        //add to pending packet dqueue
+                                        pendingPackets.add(request);
+                                    }
+                                    else
+                                    {
+                                        int remainingWindow = 4 - pendingPackets.size();
+                                        long remainingPackets = ((fileSize - currentOffset) / defaultPacketSize) >=4 ? 4 : ((fileSize - currentOffset) / defaultPacketSize);
 
-                                    long packetsToSend = remainingWindow>remainingPackets ? remainingPackets:remainingWindow;
-                                    DataRequest request = new DataRequest(identifier, currentOffset, 4*packetsToSend);
-                                    //create required number of packet request for later request
-                                    for (int i = 0; i < packetsToSend; i++) {
-                                        DataRequest request1 = new DataRequest(identifier, currentOffset, defaultPacketSize);
-                                        pendingPackets.add(request1);
-                                        currentOffset += defaultPacketSize;
+                                        long packetsToSend = remainingWindow>remainingPackets ? remainingPackets:remainingWindow;
+                                        DataRequest request = new DataRequest(identifier, currentOffset, defaultPacketSize*packetsToSend);
+                                        responseBuffer = framer.frame(request);
+                                        packet = new DatagramPacket(responseBuffer, responseBuffer.length, clinetAddress, clientPort);
+                                        sock.send(packet);
+                                        //create required number of packet request for later request
+                                        for (int i = 0; i < packetsToSend; i++) {
+                                            DataRequest request1 = new DataRequest(identifier, currentOffset, defaultPacketSize);
+                                            pendingPackets.add(request1);
+                                            currentOffset += defaultPacketSize;
+                                        }
                                     }
                                 }
+                                catch (IOException iex)
+                                {
+                                    iex.printStackTrace();
+                                }
+
                             }
                             else
                             {
                                 /*wait till few of the pending requests have been serviced*/
                                 try
                                 {
-                                    Thread.sleep(20);
+                                    Thread.sleep(100);
                                 }
                                 catch (InterruptedException inex) {
                                     inex.printStackTrace();
@@ -184,22 +210,27 @@ public class ClientManager implements Runnable {
                     DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
                     for(;;)
                     {
+                        System.out.println(" will process packet now");
                         try
                         {
                             Frame f = incomingFrames.poll();
                             if(null == f)
                             {
+                                System.out.println("incomingFrames poll returned null");
                                 if(((System.currentTimeMillis() - packetReceivedAt)) > 10000)
                                 {
-                                    System.out.print("No packets received in 10sec. Stopping packet processing thread");
+                                    System.out.print("No packets received in 100sec. Stopping socket");
+                                    executor.shutdownNow();
                                     break;
                                 }
                                 else
                                 {
-                                    Thread.sleep(20);
+                                    Thread.sleep(200);
                                     continue;
                                 }
                             }
+                            System.out.println("incomingFrames poll returned non null");
+                            packetReceivedAt = System.currentTimeMillis();
                     /*packet must be termination or Data Response*/
                             if(f instanceof DataResponse)
                             {
@@ -213,15 +244,24 @@ public class ClientManager implements Runnable {
                                     {
                                         System.out.println("Identifier : "+identifier+" bytes were written from offset "+response.offset());
 
-                                        //update pft
-                                        //TODO
                                         //remove Data request from resend
                                         Iterator<DataRequest> i = pendingPackets.iterator();
                                         while (i.hasNext())
                                         {
                                             DataRequest req = i.next();
                                             if(req.offset() == response.offset())
+                                            {System.out.println("Removing packet " + req.offset());
                                                 pendingPackets.remove(req);
+                                                if(pendingPackets.size() == 0)
+                                                {
+                                                    byte[] offset = ByteBuffer.allocate(4).putInt(currentOffset).array();
+                                                    writeOffsetInPftFile(offset);
+                                                    if(currentOffset == fileSize)
+                                                        executor.shutdownNow();
+                                                }
+                                                break;
+                                            }
+
                                         }
                                     }
                                 }
@@ -245,8 +285,12 @@ public class ClientManager implements Runnable {
                                     System.out.println("Termination Request with incorrect identifier was received. "+"Expected "+identifier+". "+"Received "+ terminationRequest.identifier());
                                 }
                             }
+                            else
+                            {
+                                System.out.println("Received packet is neither dataresonse not terminaton");
+                            }
                         }
-                        catch (InterruptedException iex)
+                        catch (Exception iex)
                         {
                             iex.printStackTrace();
                         }
@@ -261,6 +305,15 @@ public class ClientManager implements Runnable {
                     byte[] responseBuffer;
                     for(;;)
                     {
+                        try
+                        {
+                            Thread.sleep(1000);
+                        }
+                        catch (InterruptedException iex)
+                        {
+                            iex.printStackTrace();
+                        }
+                        System.out.println("Will Check If packets need to be resent");
                         if(pendingPackets.size() == 0 && (currentOffset == fileSize))
                         {
                             System.out.println("No more packets to resend. Will shut down thread");
@@ -281,16 +334,6 @@ public class ClientManager implements Runnable {
                                     ex.printStackTrace();
                                 }
                             }
-
-                        }
-
-                        try
-                        {
-                            Thread.sleep(60);
-                        }
-                        catch (InterruptedException iex)
-                        {
-                            iex.printStackTrace();
                         }
                     }
                 }
@@ -355,7 +398,8 @@ public class ClientManager implements Runnable {
             if(!Arrays.equals(request.sha1(), hash))
                 allowUpload = false;  //change this logic to delete old file
             long offset = readOffsetFromPftFile();
-            UploadResponse response = new UploadResponse(identifier, allowUpload?Status.OK:Status.ERROR, sock.getPort());
+            System.out.println("Port being used "+ sock.getLocalPort());
+            UploadResponse response = new UploadResponse(identifier, allowUpload?Status.OK:Status.ERROR, sock.getLocalPort());
             return response;
         }
         else
@@ -365,8 +409,9 @@ public class ClientManager implements Runnable {
             writeHashInPftFile(request.sha1());
             byte[] size = ByteBuffer.allocate(8).putLong(request.size()).array();
             writeSizeInPftFile(size);
-
-            UploadResponse response = new UploadResponse(identifier, Status.OK, sock.getPort());
+            System.out.println("Port being used "+ sock.getLocalPort());
+            System.out.println("Identifier"+identifier);
+            UploadResponse response = new UploadResponse(identifier, Status.OK, sock.getLocalPort());
             return response;
         }
     }
@@ -381,10 +426,10 @@ public class ClientManager implements Runnable {
             return  null;
     }
 
-    private long getFileSize(Frame frame)
+    private int getFileSize(Frame frame)
     {
         if(frame instanceof UploadRequest)
-            return ((UploadRequest)frame).size();
+            return (int)((UploadRequest)frame).size();
         else return 0;
     }
 
