@@ -9,25 +9,43 @@ import java.nio.file.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
+import java.util.Properties;
 import java.util.regex.Pattern;
 
 public class PftFileManager implements IFileFacade {
 
     private final Path path_to_file;
+    private static  String server_path;
 
+    private  void loadServerRoot()
+    {
+        File configFile = new File("config.properties");
+
+        try {
+            FileReader reader = new FileReader(configFile);
+            Properties props = new Properties();
+            props.load(reader);
+            server_path= props.getProperty("path");
+            reader.close();
+
+        } catch (FileNotFoundException ex) {
+            System.out.print("Server root folder not found");
+        } catch (IOException ex) {
+            System.out.print("Server root folder not found");
+        }
+    }
     /*Currently assume current working directory*/
     public PftFileManager(String path) {
         String fileSeparator =
                 System.getProperty("file.separator");
         String pattern = Pattern.quote(fileSeparator);
         String[] splittedFileName = path.split(pattern);
-
-        String directory =  "/home/rabbiddog/pft/server";
+        loadServerRoot();
         /*for(int i = 0; i < splittedFileName.length - 1; i++ )
         {
             directory += (splittedFileName[i] + fileSeparator);
         }*/
-        path_to_file = FileSystems.getDefault().getPath( directory, splittedFileName[splittedFileName.length-1]);
+        path_to_file = FileSystems.getDefault().getPath( server_path, splittedFileName[splittedFileName.length-1]);
     }
 
     public byte[] getHash(String hashAlgo, int offset, int length)
@@ -252,7 +270,7 @@ public class PftFileManager implements IFileFacade {
     {
         if(fileExits())
         {
-            File f = new File(path_to_file.getFileName().toString());
+            File f = new File(path_to_file.toString());
             return f.delete();
         }
         else
