@@ -1,4 +1,5 @@
 # Instructions
+```
 Both the client and server run from the same file with different command line arguments.
 Client:
       Enter the path of the folder you want to upload files from or download files from the server to the  config.properteries file.
@@ -24,3 +25,4 @@ Server:
     
   Eg: pft -s
       
+```
