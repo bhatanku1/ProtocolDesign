@@ -28,9 +28,9 @@ public class Server implements Runnable {
     private final Framer framer;
     private Random rand;
 
-    public Server(int port, int poolSize)
+    public Server(int port)
     {
-        pool = Executors.newFixedThreadPool(poolSize);
+        pool = Executors.newFixedThreadPool(20);
         try {
             datagramSocket = new DatagramSocket(port);
 

@@ -14,16 +14,17 @@ import pft.file_operation.OpenFileOperationStatus;
 import pft.file_operation.PftFileManager;
 import pft.frames.*;
 
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
-import java.net.SocketException;
+import java.net.*;
 import java.nio.ByteBuffer;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.Future;
 
+/*Assume Server has a dedicated folder specified in config.properties*/
 public class ClientManager implements Runnable {
 
     public final DatagramSocket sock;
@@ -42,7 +43,25 @@ public class ClientManager implements Runnable {
     private volatile LinkedBlockingQueue<Frame> incomingFrames;
     private volatile int currentOffset;
     private int fileSize;
+    private static  String server_path;
 
+    private  void loadServerRoot()
+    {
+        File configFile = new File("config.properties");
+
+        try {
+            FileReader reader = new FileReader(configFile);
+            Properties props = new Properties();
+            props.load(reader);
+            server_path= props.getProperty("pathServer");
+            reader.close();
+
+        } catch (FileNotFoundException ex) {
+            System.out.print("Server root folder not found");
+        } catch (IOException ex) {
+            System.out.print("Server root folder not found");
+        }
+    }
     public ClientManager(InetAddress address, int clientPort, int identifier, Frame requestFrame, boolean isDownload) throws java.net.SocketException
     {
         this.clinetAddress = address;
@@ -57,49 +76,125 @@ public class ClientManager implements Runnable {
 
         String fileName = getFileName(requestFrame);
         fileSize = getFileSize(requestFrame);
-        fileManager = new PftFileManager(fileName);
-        pftFileManager = new PftFileManager(fileName + ".pft");
+        loadServerRoot();
+        fileManager = new PftFileManager(server_path+fileName);
+        pftFileManager = new PftFileManager(server_path+fileName + ".pft");
 
     }
     public void run()
     {
-        System.out.println("Executed thread for listening to client IP: "+ clinetAddress.toString()+ " Port: "+clientPort + "Request for "+ fileManager.getFileName());
+
         ExecutorService pool =  Executors.newFixedThreadPool(20);
         if(isDownloadOperation)
-        {
-            for(;;) {
-                byte[] packetbuffer = new byte[32]; //check what happens if datagram is larger tha 512
-                DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
-                try
-                {
-                    this.sock.receive(packet);
+        { System.out.println("Executed thread for listening to client IP: "+ clinetAddress.toString()+ " Port: "+clientPort + "Request for "+ fileManager.getFileName());
+            System.out.println("Sending download...");
+            DataResponse dataResponse;
+            long offset;
+            long lengthDataToBeSend;
+            int lengthDataRequestPacket;
+            long window;
+            long fileLeft = fileSize;
+            int readBytes = 4096;
+            byte [] dataFromFile;
+            byte [] dataRequest = new byte[512];
+            byte [] dataPayload = new byte[8196];
+
+            int i;
+            Framer framer = new Framer();
+            Frame frameDataRequest = null;
+            Deframer deframer = new Deframer();
+            DatagramPacket dataRequestPacket = new DatagramPacket(dataRequest, dataRequest.length);
+            DatagramPacket dataResponsePacket ;
+            long lastValidPacketReceivedAt = System.currentTimeMillis();
+
+            while(true){
+                try {
+                    sock.setSoTimeout(10000);
+                    sock.receive(dataRequestPacket);
+                    lengthDataRequestPacket = dataRequestPacket.getLength();
+                    dataRequestPacket.getPort();
+                    byte[] dataBufferRequest = Arrays.copyOf(dataRequestPacket.getData(), lengthDataRequestPacket);
+                    frameDataRequest = deframer.deframe(dataBufferRequest);
+                    System.out.println("Packet received expecting DataRequest");
+                    if(frameDataRequest.type() == 9) {
+
+                    /*gracefully stop connection*/
+                        break;
+                    }
+                    else if(frameDataRequest.type() != 5) {
+                        if((System.currentTimeMillis() - lastValidPacketReceivedAt) > 10000)
+                        {
+                            System.out.println("No Valid packets received for 10sec. Closing client");
+                            break;
+                        }
+                    }
+                    lastValidPacketReceivedAt = System.currentTimeMillis();
+
+                    offset = ((DataRequest) frameDataRequest).offset();
+                    lengthDataToBeSend =  ((DataRequest) frameDataRequest).length();
+                    System.out.println("Offset received: " + offset);
+                    System.out.println("Length  received: " + lengthDataToBeSend);
+                    window = lengthDataToBeSend / 4096;
+                    if(window == 0) {
+                        window = 1;
+                        readBytes = (int)lengthDataToBeSend;
+
+                    }
+                    for (i = 0; i< window; i++) {
+                        dataFromFile = fileManager.readFromPosition((int)(offset),readBytes);
+                        dataResponse = new DataResponse(identifier,offset, readBytes, dataFromFile);
+                        dataPayload = framer.frame(dataResponse);
+                        dataResponsePacket = new DatagramPacket(dataPayload, dataPayload.length, clinetAddress, clientPort);
+                        sock.send(dataResponsePacket);
+                        System.out.println("Packet sent for offset: " + offset);
+                        offset += 4096;
+                    }
                 }
-                catch (IOException ex)
+                catch (SocketTimeoutException ex)
                 {
-                    System.out.println("Exception occured in client manager");
+                    ex.printStackTrace();
+                    break;
+                }
+                catch (SocketException e) {
+
+                    e.printStackTrace();
+                    break;
+                } catch (IOException e) {
+
+                    e.printStackTrace();
+                    break;
                 }
             }
+
         }
         else
         {
 
-
+            System.out.println("Executed thread for listening to client IP: "+ clinetAddress.toString()+ " Port: "+clientPort + "Upload at "+ fileManager.getFileName());
             final ExecutorService executor = Executors.newFixedThreadPool(4);
             pendingPackets = Collections.synchronizedList(new ArrayList<DataRequest>());
             incomingFrames= new LinkedBlockingQueue<Frame>(8);
 
             Future receivePacketFuture = executor.submit(new Runnable() {
                 public void run() {
+                    System.out.println("ReceivePacket thread started");
                     byte[] packetbuffer = new byte[8196]; //check what happens if datagram is larger than 8196
                     DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
                     for(;;)
                     {
+                       /* if (Thread.interrupted()) {
+                            System.out.print("Executor ShutdownNow requested. Shutting down receivePacketFuture");
+                            break;
+                        }*/
                         try
                         {
+                            System.out.println("Waiting for receiveing packet at "+sock.getLocalPort());
                             sock.receive(packet);
+                            System.out.println("Recevied packet");
                             int length = packet.getLength();
                             byte[] data = Arrays.copyOf(packet.getData(), length);
                             Frame f = deframer.deframe(data);
+                            System.out.println("deframe succeded");
                             if(f.identifier() == identifier)
                             {
                                 System.out.println("Reveiced packet with correct identifier. Putting into incoming frames");
@@ -120,8 +215,12 @@ public class ClientManager implements Runnable {
                         catch (InterruptedException iex)
                         {
                             iex.printStackTrace();
+
+                            break;
                         }
                     }
+
+                    System.out.println("For loop ended for receivePacketFuture");
                 }
             });
 
@@ -140,6 +239,10 @@ public class ClientManager implements Runnable {
                     }
                     for(;;) //this forloop keep sending requests till termination is received for file size is reached
                     {
+                        /*if (Thread.interrupted()) {
+                            System.out.print("Executor ShutdownNow requested. Shutting down sendRequestFuture");
+                            break;
+                        }*/
                         if(currentOffset< fileSize)
                         {
                             if(pendingPackets.size() == 0)//change this to allow to send multiple requests even when previous requests were not fulfilled
@@ -192,6 +295,7 @@ public class ClientManager implements Runnable {
                                 }
                                 catch (InterruptedException inex) {
                                     inex.printStackTrace();
+                                    break;
                                 }
                             }
                         }
@@ -200,6 +304,9 @@ public class ClientManager implements Runnable {
                             break;
                         }
                     }
+
+
+                    System.out.println("For loop ended for sendPacketFuture");
                 }
             });
 
@@ -211,6 +318,10 @@ public class ClientManager implements Runnable {
                     DatagramPacket packet = new DatagramPacket(packetbuffer, packetbuffer.length);
                     for(;;)
                     {
+                        /*if (Thread.interrupted()) {
+                            System.out.print("Executor ShutdownNow requested. Shutting down processPacketFuture");
+                            break;
+                        }*/
                         System.out.println(" will process packet now");
                         try
                         {
@@ -259,6 +370,7 @@ public class ClientManager implements Runnable {
                                                     writeOffsetInPftFile(offset);
                                                     if(currentOffset == fileSize)
                                                     {
+                                                        System.out.print("Current offset is file size. Will stop precess");
                                                         /*send termination request*/
                                                         byte[] terminationBuffer = framer.frame(new TerminationRequest(identifier, Status.OK));
                                                         DatagramPacket pack = new DatagramPacket(terminationBuffer, terminationBuffer.length, clinetAddress, clientPort);
@@ -286,8 +398,7 @@ public class ClientManager implements Runnable {
                                 TerminationRequest terminationRequest = (TerminationRequest) f;
                                 if(terminationRequest.identifier() == identifier)
                                 {
-                                    //Notify other threads to shutdown
-                                    //TODO
+                                    System.out.println("Received Termination request. Will stop process");
                                     executor.shutdownNow();
                                 }
                                 else
@@ -300,11 +411,18 @@ public class ClientManager implements Runnable {
                                 System.out.println("Received packet is neither dataresonse not terminaton");
                             }
                         }
-                        catch (Exception iex)
+                        catch (InterruptedException iex)
                         {
                             iex.printStackTrace();
+                            break;
+                        }
+                        catch (IOException ex)
+                        {
+                            ex.printStackTrace();
                         }
                     }
+
+                    System.out.println("For loop ended for processPAcketFuture");
                 }
             });
 
@@ -315,6 +433,10 @@ public class ClientManager implements Runnable {
                     byte[] responseBuffer;
                     for(;;)
                     {
+                        /*if (Thread.interrupted()) {
+                            System.out.print("Executor ShutdownNow requested. Shutting down resendRequestFuture");
+                            break;
+                        }*/
                         try
                         {
                             Thread.sleep(1000);
@@ -322,6 +444,7 @@ public class ClientManager implements Runnable {
                         catch (InterruptedException iex)
                         {
                             iex.printStackTrace();
+                            break;
                         }
                         System.out.println("Will Check If packets need to be resent");
                         if(pendingPackets.size() == 0 && (currentOffset == fileSize))
@@ -346,6 +469,8 @@ public class ClientManager implements Runnable {
                             }
                         }
                     }
+
+                    System.out.println("For loop ended for resendPacketFuture");
                 }
             });
 
@@ -373,11 +498,11 @@ public class ClientManager implements Runnable {
             {
                 if(Arrays.equals(empty, request.sha1()))
                 {
-                    response = new DownloadResponse(this.identifier, Status.ERROR, 0, 0, empty);
+                    response = new DownloadResponse(this.identifier, Status.OK, this.sock.getLocalPort(), fileSize, fileManager.getHash("SHA-1", 0, (int)fileSize));
                 }
                 else if(fileManager.fileMatchDescription(request.sha1(), "SHA-1") == OpenFileOperationStatus.HASH_MATCH)
                 {
-                    response = new DownloadResponse(this.identifier, Status.OK, this.sock.getPort(), fileSize, fileManager.getHash("SHA-1", 0, (int)fileSize));
+                    response = new DownloadResponse(this.identifier, Status.OK, this.sock.getLocalPort(), fileSize, fileManager.getHash("SHA-1", 0, (int)fileSize));
                 }
                 else
                 {
