@@ -80,7 +80,7 @@ public class Client {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
-        DatagramPacket packet = new DatagramPacket(payload, payload.length, receiverAddress, 180);
+        DatagramPacket packet = new DatagramPacket(payload, payload.length, receiverAddress, 7000);
         DatagramPacket packetResponse = new DatagramPacket(response, response.length);
         try {
             datagramSocket.send(packet);
