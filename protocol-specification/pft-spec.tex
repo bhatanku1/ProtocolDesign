@@ -53,7 +53,7 @@ or resume a paused download. The identifier must always be set to zero.
 The SHA1 field is set to all zeroes in case of a new download, or to
 the SHA1 hash of the whole file (as it exists on the server) 
 in case of a paused download. The filename is a sequence of US ASCII
-characters, where the last character must be followed bya zero octet.
+characters, where the last character must be followed by a zero octet.
 Therefore, the protocol supports filenames of up to 255 octets in length.
 
 \begin{figure}[H]
@@ -71,7 +71,7 @@ byte identifier set, that uniquely identifies this download. All
 future frames regarding this download (from both client and server)
 must have this identifier set. A non-zero status indicates that the
 download cannot be started. The detailed semantics of each status code are outlined
-in the status code section. The port field specifies to the client
+in the status code section (Section~\ref{STATUS-CODES}). The port field specifies to the client
 on which server port to send any further frames for this download.
 The port can either be the same as the port used to send the
 download request to, or a new one. A server needs to make sure
@@ -92,7 +92,7 @@ with status code TIMEOUT to the client (using the same identifier).
 A client sends this frame to the server to initiate a new 
 or resume a paused upload. The identifier must always be set to zero.  
 The filename is a sequence of US ASCII
-characters, where the last character must be followed bya zero octet.
+characters, where the last character must be followed by a zero octet.
 Therefore, the protocol supports filenames of up to 255 octets in length.
 The size field is an unsigned integer and must be set to the number
 of bytes of the whole file. The SHA1 field must be set to the SHA1
@@ -172,7 +172,7 @@ frames each carrying four kilobytes of data.
 A checksum request frame may only be sent by the data receiving side. That is, by the client
 in case of a download or by the server when uploading. It's used to verify the checksum of
 the whole file or a part of it. It's intended to be sent after having fully received
-the data of a data request, and allows to receiving side to verify the correctness early
+the data of a data request, and allows the receiving side to verify the correctness early
 on, as opposed to after the download or upload has finished. It may also be used to verify 
 the correctness of a partially down- or uploaded file, immediately after having restarted
 a down- or upload. 
@@ -213,6 +213,7 @@ sent a termination request.
 \end{figure}
 
 \section{Status Codes}
+\label{STATUS-CODES}
 
 \begin{itemize}
 \item[\textbf{OK (0x0)}] There were no errors and everything went as expected. 
